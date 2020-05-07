@@ -5,7 +5,7 @@ library(tidyverse)
 library(shinyWidgets)
 library(bsplus)
 
-
+shinyWidgetsGallery()
 
 ui <- fluidPage(
 
@@ -45,9 +45,6 @@ tabsetPanel(id = "tab1",
             tags$h2("An overview of the data frame"),  
             
             tableOutput(outputId = "tbl_loading")
-                
-                
-                
                 
                 
             )
@@ -94,7 +91,7 @@ tabPanel(title = "Model Tuning",
                
                pickerInput(
                    inputId = "ID_choose",
-                   label = "Select the identification column", 
+                   label = "Select the Identification column", 
                    choices = "",
                    options = list(
                        style = "btn-danger")),
@@ -115,7 +112,7 @@ tabPanel(title = "Model Tuning",
                pickerInput(
                    inputId = "orientation_choose",
                    label = "Select the orientation", 
-                   choices = c("input", "ouput"),
+                   choices = c("input", "output"),
                    options = list(
                        style = "btn-danger"))
                
@@ -128,32 +125,16 @@ tabPanel(title = "Model Tuning",
         br(), 
         
         br(), 
-        
-        br(), 
-        
-        br(), 
-        
-        br(), 
-        
-        br(),
-        
-        br(),
-        
-        br(),
-        
-        br(),
-        
-        br(),
 
 
         fluidRow(
             
             column(4, ""), 
             
-            column(4, actionButton(inputId = "btn_calc1", 
-                                   label = "Calculate Efficiency")), 
+            column(4, ""),
             
-            column(4, "")
+            column(4, submitButton(text = "Calculate Efficiency")), 
+            
             
             
         ),
@@ -175,15 +156,19 @@ tabPanel(title = "Model Tuning",
 # Results -----------------------------------------------------------------
 
 tabPanel(title = "Efficiency Results", 
+
+fluidRow(
+  
+  column(3, downloadButton(outputId = "dbtn1", label = "download")), 
+  
+  column(4, gt::gt_output("eff_results1") %>% withSpinner(color = "#324C63"))
+  
+  
+)
     
-    
-DT::dataTableOutput("eff_results1")
-    
-    
-    
-    
-    
-    
+
+
+  
     
     
 )
@@ -221,7 +206,7 @@ server <- function(input, output, session) {
     
 
 
-
+  
 
 df <- reactive({
     
@@ -233,7 +218,7 @@ df <- reactive({
     updateAwesomeCheckboxGroup(session = session,
                       inputId = "input_select", 
                       label = "Select the Input Variables", 
-                      choices = data %>% names(),
+                      choices = data %>% select_if(is.numeric) %>% names(),
                       selected = NULL, 
                       status = "danger", 
                       inline = F)
@@ -241,7 +226,7 @@ df <- reactive({
     updateAwesomeCheckboxGroup(session = session,
                                inputId = "output_select", 
                                label = "Select the Output Variables", 
-                               choices = data %>% names(),
+                               choices = data %>% select_if(is.numeric) %>% names(),
                                selected = NULL, 
                                status = "danger", 
                                inline = F)
@@ -330,29 +315,66 @@ fdh: Free disposability hull, no convexity assumption
     ))
 })
 
-observeEvent(input$btn_calc1, {
-    
-output$eff_results1 <- DT::renderDataTable({
-    
-inputs <- df() %>% select(input$input_select)
-outputs <- df() %>% select(input$output_select)
 
-r_eff <- Benchmarking::dea(X = inputs, 
-                         Y = outputs, 
-                         RTS = input$RTS_choose, 
-                         ORIENTATION = "in")
 
-results <- tibble(score = r_eff$eff)
+scores <- reactive({
+  
+  
+  inputs <- df() %>% select(input$input_select) 
+  outputs <- df() %>% select(input$output_select) 
+  
+  orientation <- switch(input$orientation_choose, 
+                        "input" = "in" , 
+                        "output" = "out")
+  
+  r_eff <- Benchmarking::dea(X = inputs, 
+                             Y = outputs, 
+                             RTS = input$RTS_choose, 
+                             ORIENTATION = orientation)
+  
+  id <- df() %>% select(input$ID_choose)
+  
+  results <- tibble(score = r_eff$eff) 
+  
+  results <- cbind(id, results)
+  
+  results <- results %>% arrange(desc(r_eff$eff))
+  
+  print(results)
+  
+  
+})
 
-results
-    
-    
+
+
+
+
+output$eff_results1 <- gt::render_gt({
+  
+  
+  req(input$input_select, 
+      input$output_select, 
+      input$orientation_choose,
+      input$RTS_choose,
+      input$ID_choose)
+  
+
+  scores()
+
+
 })
     
-    
-    
-    
-})
+
+output$dbtn1 <- downloadHandler(
+  filename = function() {
+    paste('efficiency-', Sys.Date(), '.csv', sep='')
+  },
+  content = function(file) {
+    readr::write_csv(scores(), path = file)
+  }
+  
+  
+)
 
 
 
