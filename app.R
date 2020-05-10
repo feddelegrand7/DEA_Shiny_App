@@ -156,49 +156,43 @@ tabPanel(title = "Model Tuning",
 # Results -----------------------------------------------------------------
 
 tabPanel(title = "Efficiency Results", 
-
-fluidRow(
-  
-  column(3, downloadButton(outputId = "dbtn1", label = "download")), 
-  
-  column(4, gt::gt_output("eff_results1") %>% withSpinner(color = "#324C63"))
+         
+         
+sidebarLayout(
   
   
-)
+  sidebarPanel(
     
-
-
+    helpText("Click on the download button to get a csv file of the results"),
+    
+    downloadButton(outputId = "dbtn1", label = "download"),
+    br(), 
+    br(),
+    h3("            DEA Summary"), 
+    verbatimTextOutput("summary")
+    
+  ), 
   
-    
-    
-)
-            
-            
-            
-            
-            
-            
+  mainPanel(
+    gt::gt_output("eff_results1") %>% withSpinner(color = "#324C63")
       
-            )
+      
+      )
     
-)
+    
+    
+  )
+  
+  
 
 
-
-
-
-
-# Results -----------------------------------------------------------------
-
+    
+  )))   
+    
 
 
 
 ############################ SERVER #######################################
-
-# -------------------------------------------------------------------------
-
-
-
 
 
 
@@ -319,9 +313,11 @@ fdh: Free disposability hull, no convexity assumption
 
 scores <- reactive({
   
+  df <- df()
   
-  inputs <- df() %>% select(input$input_select) 
-  outputs <- df() %>% select(input$output_select) 
+  
+  inputs <- df %>% select(input$input_select) 
+  outputs <- df %>% select(input$output_select) 
   
   orientation <- switch(input$orientation_choose, 
                         "input" = "in" , 
@@ -332,15 +328,23 @@ scores <- reactive({
                              RTS = input$RTS_choose, 
                              ORIENTATION = orientation)
   
-  id <- df() %>% select(input$ID_choose)
+  
+  id <- df %>% select(input$ID_choose)
+  
+  id2 <- df[, input$ID_choose]
   
   results <- tibble(score = r_eff$eff) 
   
-  results <- cbind(id, results)
+  peers <- Benchmarking::peers(r_eff, NAMES = df %>% pull(input$ID_choose))
+  
+  peers <- as.data.frame(peers)
+  
+  results <- cbind(id, results, peers)
   
   results <- results %>% arrange(desc(r_eff$eff))
   
   print(results)
+  
   
   
 })
@@ -359,7 +363,7 @@ output$eff_results1 <- gt::render_gt({
       input$ID_choose)
   
 
-  scores()
+  scores() 
 
 
 })
@@ -375,6 +379,33 @@ output$dbtn1 <- downloadHandler(
   
   
 )
+
+output$summary <- renderPrint({
+  
+  
+  req(input$input_select, 
+      input$output_select, 
+      input$orientation_choose,
+      input$RTS_choose,
+      input$ID_choose)
+  
+  
+  inputs <- df() %>% select(input$input_select) 
+  outputs <- df() %>% select(input$output_select) 
+  
+  orientation <- switch(input$orientation_choose, 
+                        "input" = "in" , 
+                        "output" = "out")
+  
+  r_eff <- Benchmarking::dea(X = inputs, 
+                             Y = outputs, 
+                             RTS = input$RTS_choose, 
+                             ORIENTATION = orientation)
+  
+  summary(r_eff)
+  
+})
+
 
 
 
